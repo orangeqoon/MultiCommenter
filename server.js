@@ -9,6 +9,7 @@ const twitchApi = require('./twitch');
 const youtubeApi = require('./youtube');
 const kickApi = require('./kick');
 const fc2Api = require('./fc2');
+const picartoApi = require('./picarto');
 
 const PORT = 18767;
 const pendingFc2Comments = [];
@@ -293,6 +294,15 @@ const server = http.createServer(async (req, res) => {
                         fc2Api.postComment(text)
                             .then(() => { results.fc2 = { success: true }; })
                             .catch(e => { results.fc2 = { success: false, error: e.message }; })
+                    );
+                }
+
+                // 8. Picarto.tv (Node.js直接WebSocketオンデマンド接続)
+                if (targets.includes('picarto')) {
+                    promises.push(
+                        picartoApi.postComment(text)
+                            .then(() => { results.picarto = { success: true }; })
+                            .catch(e => { results.picarto = { success: false, error: e.message }; })
                     );
                 }
 

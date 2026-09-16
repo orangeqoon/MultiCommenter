@@ -18,6 +18,7 @@
             --kick-color: #53fc18;
             --fc2-color: #ff7700;
             --kukulu-color: #ffb300;
+            --picarto-color: #1ba2f3;
         }
 
         * {
@@ -187,6 +188,7 @@
         .platform-pill.kick.active { color: var(--kick-color); }
         .platform-pill.twitch.active { color: var(--twitch-color); }
         .platform-pill.youtube.active { color: var(--youtube-color); }
+        .platform-pill.picarto.active { color: var(--picarto-color); }
 
         .pill-dot {
             width: 6px;
@@ -408,6 +410,9 @@
             </div>
             <div class="platform-pill kukulu active" data-platform="kukulu" onclick="togglePlatform(this)">
                 <span class="pill-dot"></span> Kukulu
+            </div>
+            <div class="platform-pill picarto active" data-platform="picarto" onclick="togglePlatform(this)">
+                <span class="pill-dot"></span> Picarto
             </div>
         </div>
     </div>
