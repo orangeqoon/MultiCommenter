@@ -1,0 +1,22 @@
+{
+  "name": "multi-commenter",
+  "version": "1.0.0",
+  "description": "Multi-Streaming Simultaneous Comment Poster with Restream Chat Shell",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-packager . MultiCommenter --platform=win32 --arch=x64 --overwrite --out=dist --electron-version=30.5.1"
+  },
+  "keywords": [
+    "multistream",
+    "chat",
+    "comment",
+    "overlay",
+    "restream"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^30.5.1"
+  }
+}
