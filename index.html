@@ -50,6 +50,14 @@
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
             overflow: hidden;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        /* クリック透過 (Ghost Mode) 時のスタイル */
+        body.ghost-mode .window-card {
+            border-color: rgba(0, 229, 255, 0.4);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.25);
+            background: rgba(18, 20, 24, 0.65);
         }
 
         /* ドラッグ可能タイトルバー */
@@ -73,10 +81,18 @@
             color: #fff;
         }
 
-        .title-icon {
-            width: 16px;
-            height: 16px;
-            fill: var(--primary-accent);
+        .ghost-badge {
+            display: none;
+            font-size: 10px;
+            padding: 2px 7px;
+            border-radius: 10px;
+            background: rgba(0, 229, 255, 0.2);
+            color: #00e5ff;
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            font-weight: 600;
+        }
+        body.ghost-mode .ghost-badge {
+            display: inline-block;
         }
 
         .window-controls {
@@ -108,7 +124,8 @@
 
         .control-btn.active {
             color: #00e5ff;
-            background: rgba(0, 229, 255, 0.15);
+            background: rgba(0, 229, 255, 0.18);
+            border: 1px solid rgba(0, 229, 255, 0.35);
         }
 
         .control-btn.close:hover {
@@ -365,14 +382,14 @@
 
 <div class="window-card">
     <!-- Restream Chat 風タイトルバー (オレンジ君マスコット) -->
-    <div class="titlebar">
+    <div class="titlebar" id="titlebar">
         <div class="title-left">
             <img src="/tray_icon.png" alt="オレンジ君" style="width: 22px; height: 22px; border-radius: 50%; box-shadow: 0 2px 6px rgba(255,140,0,0.5);">
             <span>MultiCommenter</span>
+            <span class="ghost-badge" id="ghost-badge">👻 透過中 (解除可)</span>
         </div>
-        <div class="window-controls">
-            <button class="control-btn" id="voice-btn" title="音声認識アシスタントを開く (Chrome)">🎙️</button>
-            <button class="control-btn" id="pin-btn" title="最前面固定の切替 (Ctrl+Shift+T)">📌</button>
+        <div class="window-controls" id="window-controls">
+            <button class="control-btn active" id="pin-btn" title="最前面固定の切替 (Ctrl+Shift+T)">📌</button>
             <button class="control-btn" id="ghost-btn" title="クリック透過の切替 (Ctrl+Shift+Space)">👻</button>
             <button class="control-btn" id="min-btn" title="最小化">_</button>
             <button class="control-btn close" id="close-btn" title="閉じる">✕</button>
@@ -425,7 +442,7 @@
                 <span>Ready</span>
             </div>
             <div class="bubble-text" style="color: var(--text-sub); font-size: 12px;">
-                配信サイトを選択し、下の入力欄またはマイクボタン🎙️から音声認識で同時送信できます。
+                配信サイトを選択し、下の入力欄からメッセージを同時送信できます。
             </div>
         </div>
     </div>
@@ -433,9 +450,8 @@
     <!-- 入力バー -->
     <div class="chat-input-bar">
         <div class="input-wrapper">
-            <input type="text" id="comment-input" class="chat-input" placeholder="Type or speak a message..." autocomplete="off">
+            <input type="text" id="comment-input" class="chat-input" placeholder="Type a message to send... (Enter)" autocomplete="off">
         </div>
-        <button class="control-btn" id="voice-btn-bar" title="音声認識入力を起動 (Chrome)" style="width: 36px; height: 36px; font-size: 16px; background: rgba(255,140,0,0.18); border: 1px solid rgba(255,140,0,0.4); border-radius: 50%; color: #ff9900;">🎙️</button>
         <button class="send-button" id="send-btn" title="送信 (Enter)">
             <svg class="send-icon" viewBox="0 0 24 24">
                 <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -443,96 +459,62 @@
         </button>
     </div>
     <div class="shortcut-hint">
-        Ctrl+Shift+T: 最前面 | Ctrl+Shift+Space: クリック透過 | 🎙️ 音声認識
+        Ctrl+Shift+T: 最前面固定 | Ctrl+Shift+Space: クリック透過 (👻)
     </div>
 </div>
 
 <script>
-    // Electron IPC の安全な取得
-    let ipcRenderer = null;
-    try {
-        if (window.require) {
-            ipcRenderer = window.require('electron').ipcRenderer;
-        }
-    } catch (e) {}
+    // Electron API 連携 (preload経由または直接)
+    const api = window.electronAPI || (window.require ? {
+        minimize: () => window.require('electron').ipcRenderer.send('window-minimize'),
+        close: () => window.require('electron').ipcRenderer.send('window-close'),
+        togglePin: () => window.require('electron').ipcRenderer.send('toggle-pin'),
+        toggleClickThrough: () => window.require('electron').ipcRenderer.send('toggle-click-through'),
+        setIgnoreMouseEvents: (ignore, options) => window.require('electron').ipcRenderer.send('set-ignore-mouse-events', ignore, options),
+        onPinStatusChanged: (cb) => window.require('electron').ipcRenderer.on('pin-status-changed', (_, val) => cb(val)),
+        onClickThroughChanged: (cb) => window.require('electron').ipcRenderer.on('click-through-changed', (_, val) => cb(val))
+    } : null);
 
-    // ウィンドウコントロール
     const pinBtn = document.getElementById('pin-btn');
     const ghostBtn = document.getElementById('ghost-btn');
     const minBtn = document.getElementById('min-btn');
     const closeBtn = document.getElementById('close-btn');
-    const voiceBtn = document.getElementById('voice-btn');
-    const voiceBtnBar = document.getElementById('voice-btn-bar');
+    const titlebar = document.getElementById('titlebar');
+    let isGhostActive = false;
 
-    function openVoiceAssistant() {
-        if (ipcRenderer) {
-            ipcRenderer.send('open-voice-input');
-        } else {
-            window.open('/speech.html', '_blank', 'width=480,height=620');
-        }
-    }
+    if (api) {
+        pinBtn.addEventListener('click', () => api.togglePin());
+        ghostBtn.addEventListener('click', () => api.toggleClickThrough());
+        minBtn.addEventListener('click', () => api.minimize());
+        closeBtn.addEventListener('click', () => api.close());
 
-    if (voiceBtn) voiceBtn.addEventListener('click', openVoiceAssistant);
-    if (voiceBtnBar) voiceBtnBar.addEventListener('click', openVoiceAssistant);
-
-    if (ipcRenderer) {
-        pinBtn.addEventListener('click', () => ipcRenderer.send('toggle-pin'));
-        ghostBtn.addEventListener('click', () => ipcRenderer.send('toggle-click-through'));
-        minBtn.addEventListener('click', () => ipcRenderer.send('window-minimize'));
-        closeBtn.addEventListener('click', () => ipcRenderer.send('window-close'));
-
-        ipcRenderer.on('pin-status-changed', (_, isPinned) => {
+        api.onPinStatusChanged((isPinned) => {
             pinBtn.classList.toggle('active', isPinned);
         });
-        ipcRenderer.on('click-through-changed', (_, isClickThrough) => {
+
+        api.onClickThroughChanged((isClickThrough) => {
+            isGhostActive = isClickThrough;
             ghostBtn.classList.toggle('active', isClickThrough);
+            document.body.classList.toggle('ghost-mode', isClickThrough);
         });
-        // 初期状態は Pin ON
-        pinBtn.classList.add('active');
-    } else {
-        document.querySelector('.window-controls').style.display = 'none';
-    }
 
-    // 音声認識イベントリスナー (SSE & フォールバック)
-    function initVoiceEvents() {
-        try {
-            const evtSource = new EventSource('/api/voice_events');
-            evtSource.onmessage = (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data && data.text) {
-                        input.value = data.text;
-                        input.focus();
-                        if (data.autoSend) {
-                            sendComment();
-                        }
-                    }
-                } catch (err) {}
-            };
-            evtSource.onerror = () => {
-                setInterval(pollVoiceInput, 1200);
-            };
-        } catch (e) {
-            setInterval(pollVoiceInput, 1200);
-        }
-    }
-
-    async function pollVoiceInput() {
-        try {
-            const res = await fetch('/api/voice_poll');
-            const data = await res.json();
-            if (data && data.inputs && data.inputs.length > 0) {
-                for (const item of data.inputs) {
-                    input.value = item.text;
-                    input.focus();
-                    if (item.autoSend) {
-                        sendComment();
-                    }
-                }
+        // クリック透過 (Ghost Mode) 中のスマートインタラクション:
+        // タイトルバーにマウスが乗ったら操作可能にし、離れたら再び透過に戻す
+        titlebar.addEventListener('mouseenter', () => {
+            if (isGhostActive) {
+                api.setIgnoreMouseEvents(false);
             }
-        } catch (e) {}
+        });
+
+        titlebar.addEventListener('mouseleave', () => {
+            if (isGhostActive) {
+                api.setIgnoreMouseEvents(true, { forward: true });
+            }
+        });
+    } else {
+        // ブラウザ単体で開かれた場合はタイトルバー右側のElectron固有ボタンを非表示
+        document.getElementById('window-controls').style.display = 'none';
     }
-    initVoiceEvents();
 
     // プラットフォーム選択
     function togglePlatform(el) {

@@ -13,8 +13,6 @@ const picartoApi = require('./picarto');
 
 const PORT = 18767;
 const pendingFc2Comments = [];
-const pendingVoiceInputs = [];
-let voiceSubscribers = [];
 
 const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -39,19 +37,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // 音声認識アシスタント画面
-    if (req.method === 'GET' && (req.url === '/speech' || req.url === '/speech.html')) {
-        const speechPath = path.join(__dirname, 'speech.html');
-        if (fs.existsSync(speechPath)) {
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(fs.readFileSync(speechPath));
-        } else {
-            res.writeHead(404);
-            res.end("speech.html not found");
-        }
-        return;
-    }
-
     // 静的アイコン画像
     if (req.method === 'GET' && (req.url === '/icon.png' || req.url === '/tray_icon.png')) {
         const imgPath = path.join(__dirname, req.url.replace('/', ''));
@@ -62,59 +47,6 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(404);
             res.end();
         }
-        return;
-    }
-
-    // 音声入力 SSE イベントストリーム
-    if (req.method === 'GET' && req.url === '/api/voice_events') {
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*'
-        });
-        res.write(': connected\n\n');
-        voiceSubscribers.push(res);
-        req.on('close', () => {
-            voiceSubscribers = voiceSubscribers.filter(client => client !== res);
-        });
-        return;
-    }
-
-    // 音声認識結果の受信 (Chromeから受信)
-    if (req.method === 'POST' && req.url === '/api/voice_input') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', () => {
-            try {
-                const data = JSON.parse(body);
-                pendingVoiceInputs.push(data);
-                if (pendingVoiceInputs.length > 30) pendingVoiceInputs.shift();
-
-                // SSE 接続中のクライアントに即座に通知
-                const payload = JSON.stringify(data);
-                voiceSubscribers.forEach(client => {
-                    try {
-                        client.write(`data: ${payload}\n\n`);
-                    } catch (e) {}
-                });
-
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true }));
-            } catch (e) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, error: e.message }));
-            }
-        });
-        return;
-    }
-
-    // 音声入力ポーリング用フォールバック
-    if (req.method === 'GET' && req.url === '/api/voice_poll') {
-        const inputs = [...pendingVoiceInputs];
-        pendingVoiceInputs.length = 0;
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ inputs }));
         return;
     }
 

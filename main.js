@@ -54,10 +54,15 @@ function createWindow() {
         backgroundColor: '#00000000',
         icon: path.join(__dirname, 'icon.png'),
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
         }
     });
+
+    // Windowsで常に最前面をキープ
+    mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
     // サーバーの準備ができたらロード
     waitForServer(18767).then((ready) => {
@@ -83,7 +88,7 @@ function createWindow() {
 
     ipcMain.on('toggle-pin', (event) => {
         isAlwaysOnTop = !isAlwaysOnTop;
-        mainWindow.setAlwaysOnTop(isAlwaysOnTop);
+        mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
         event.reply('pin-status-changed', isAlwaysOnTop);
         updateTrayMenu();
     });
@@ -93,9 +98,11 @@ function createWindow() {
         event.reply('click-through-changed', isClickThrough);
     });
 
-    ipcMain.on('open-voice-input', () => {
-        const { exec } = require('child_process');
-        exec('start chrome http://127.0.0.1:18767/speech.html');
+    ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+            win.setIgnoreMouseEvents(ignore, options);
+        }
     });
 
     setupShortcuts();
@@ -122,7 +129,7 @@ function setupShortcuts() {
     globalShortcut.register('CommandOrControl+Shift+T', () => {
         if (mainWindow) {
             isAlwaysOnTop = !isAlwaysOnTop;
-            mainWindow.setAlwaysOnTop(isAlwaysOnTop);
+            mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
             mainWindow.webContents.send('pin-status-changed', isAlwaysOnTop);
             updateTrayMenu();
         }
@@ -164,13 +171,13 @@ function updateTrayMenu() {
             }
         },
         {
-            label: '最前面固定',
+            label: '最前面固定 (Ctrl+Shift+T)',
             type: 'checkbox',
             checked: isAlwaysOnTop,
             click: () => {
                 if (mainWindow) {
                     isAlwaysOnTop = !isAlwaysOnTop;
-                    mainWindow.setAlwaysOnTop(isAlwaysOnTop);
+                    mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
                     mainWindow.webContents.send('pin-status-changed', isAlwaysOnTop);
                 }
             }
@@ -181,14 +188,6 @@ function updateTrayMenu() {
             checked: isClickThrough,
             click: () => {
                 toggleClickThrough();
-            }
-        },
-        { type: 'separator' },
-        {
-            label: '🎙️ 音声認識アシスタントを開く (Chrome)',
-            click: () => {
-                const { exec } = require('child_process');
-                exec('start chrome http://127.0.0.1:18767/speech.html');
             }
         },
         { type: 'separator' },
