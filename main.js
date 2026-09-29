@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage, screen } = require('electron');
 const path = require('path');
 const http = require('http');
 
@@ -61,8 +61,7 @@ function createWindow() {
     });
 
     // Windowsで常に最前面をキープ
-    mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
-    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    mainWindow.setAlwaysOnTop(isAlwaysOnTop);
 
     // サーバーの準備ができたらロード
     waitForServer(18767).then((ready) => {
@@ -73,7 +72,13 @@ function createWindow() {
         }
     });
 
+    mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.send('pin-status-changed', isAlwaysOnTop);
+        mainWindow.webContents.send('click-through-changed', isClickThrough);
+    });
+
     mainWindow.on('closed', () => {
+        stopMousePolling();
         mainWindow = null;
     });
 
@@ -86,16 +91,17 @@ function createWindow() {
         if (mainWindow) mainWindow.close();
     });
 
-    ipcMain.on('toggle-pin', (event) => {
+    ipcMain.on('toggle-pin', () => {
         isAlwaysOnTop = !isAlwaysOnTop;
-        mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
-        event.reply('pin-status-changed', isAlwaysOnTop);
+        if (mainWindow) {
+            mainWindow.setAlwaysOnTop(isAlwaysOnTop);
+            mainWindow.webContents.send('pin-status-changed', isAlwaysOnTop);
+        }
         updateTrayMenu();
     });
 
-    ipcMain.on('toggle-click-through', (event) => {
+    ipcMain.on('toggle-click-through', () => {
         toggleClickThrough();
-        event.reply('click-through-changed', isClickThrough);
     });
 
     ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
@@ -109,13 +115,50 @@ function createWindow() {
     setupTray();
 }
 
+let mousePollInterval = null;
+
 function toggleClickThrough() {
     isClickThrough = !isClickThrough;
     if (mainWindow) {
         mainWindow.setIgnoreMouseEvents(isClickThrough, { forward: true });
         mainWindow.webContents.send('click-through-changed', isClickThrough);
+        if (isClickThrough) {
+            startMousePolling();
+        } else {
+            stopMousePolling();
+        }
     }
     updateTrayMenu();
+}
+
+// クリック透過（Ghost Mode）中もタイトルバーだけはマウス操作可能にするスマートポーリング
+function startMousePolling() {
+    if (mousePollInterval) return;
+    mousePollInterval = setInterval(() => {
+        if (!mainWindow || !isClickThrough || mainWindow.isDestroyed()) {
+            stopMousePolling();
+            return;
+        }
+        try {
+            const point = screen.getCursorScreenPoint();
+            const bounds = mainWindow.getBounds();
+            // タイトルバー領域（上部48px）にカーソルがある場合はクリックを受け付ける
+            const isOverTitlebar = (
+                point.x >= bounds.x &&
+                point.x <= bounds.x + bounds.width &&
+                point.y >= bounds.y &&
+                point.y <= bounds.y + 48
+            );
+            mainWindow.setIgnoreMouseEvents(!isOverTitlebar, { forward: true });
+        } catch (e) {}
+    }, 80);
+}
+
+function stopMousePolling() {
+    if (mousePollInterval) {
+        clearInterval(mousePollInterval);
+        mousePollInterval = null;
+    }
 }
 
 function setupShortcuts() {
@@ -129,7 +172,7 @@ function setupShortcuts() {
     globalShortcut.register('CommandOrControl+Shift+T', () => {
         if (mainWindow) {
             isAlwaysOnTop = !isAlwaysOnTop;
-            mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
+            mainWindow.setAlwaysOnTop(isAlwaysOnTop);
             mainWindow.webContents.send('pin-status-changed', isAlwaysOnTop);
             updateTrayMenu();
         }

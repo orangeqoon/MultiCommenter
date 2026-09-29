@@ -483,10 +483,22 @@
     let isGhostActive = false;
 
     if (api) {
-        pinBtn.addEventListener('click', () => api.togglePin());
-        ghostBtn.addEventListener('click', () => api.toggleClickThrough());
-        minBtn.addEventListener('click', () => api.minimize());
-        closeBtn.addEventListener('click', () => api.close());
+        pinBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            api.togglePin();
+        });
+        ghostBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            api.toggleClickThrough();
+        });
+        minBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            api.minimize();
+        });
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            api.close();
+        });
 
         api.onPinStatusChanged((isPinned) => {
             pinBtn.classList.toggle('active', isPinned);

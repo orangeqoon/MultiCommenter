@@ -1,6 +1,6 @@
 {
   "name": "multi-commenter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Multi-Streaming Simultaneous Comment Poster with Restream Chat Shell",
   "main": "main.js",
   "scripts": {

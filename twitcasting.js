@@ -61,21 +61,13 @@ function apiRequest(apiPath, method, body, token) {
 }
 
 async function getCurrentMovieId(token) {
-    // ユーザー情報を取得して screen_id を特定（または verify で十分）
-    // verify credential 
+    // /users/{id}/current_live は配信中でも404を返すことがあり信頼できないため、
+    // verify_credentials が返す user.is_live / user.last_movie_id を使う
     const verify = await apiRequest("/verify_credentials", "GET", null, token);
-    const screen_id = verify.user.screen_id;
-    
-    // 現在のライブを取得
-    try {
-        const liveRes = await apiRequest(`/users/${screen_id}/current_live`, "GET", null, token);
-        return liveRes.movie.id;
-    } catch (e) {
-        if (e.message.includes("404")) {
-            return null; // 配信していない
-        }
-        throw e;
+    if (!verify.user.is_live) {
+        return null; // 配信していない
     }
+    return verify.user.last_movie_id;
 }
 
 async function postComment(text) {
