@@ -2,8 +2,32 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const CRED_PATH = "C:\\scripts\\NeonTimerApp\\credentials.json";
-const TOKEN_PATH = "C:\\scripts\\NeonTimerApp\\NeonTimer-win32-x64\\resources\\app\\token.json";
+const CRED_CANDIDATES = [
+    path.join(__dirname, "..", "state", "tokens", "credentials.json"),
+    "C:\\scripts\\state\\tokens\\credentials.json",
+    "C:\\scripts\\NeonTimerApp\\credentials.json"
+];
+
+const TOKEN_CANDIDATES = [
+    path.join(__dirname, "..", "state", "tokens", "token.json"),
+    "C:\\scripts\\state\\tokens\\token.json",
+    "C:\\scripts\\NeonTimerApp\\NeonTimer-win32-x64\\resources\\app\\token.json"
+];
+
+function findLatest(candidates) {
+    let best = null;
+    let bestMtime = -1;
+    for (const p of candidates) {
+        if (fs.existsSync(p)) {
+            const stat = fs.statSync(p);
+            if (stat.mtimeMs > bestMtime) {
+                bestMtime = stat.mtimeMs;
+                best = p;
+            }
+        }
+    }
+    return best;
+}
 
 function httpsRequest(options, body) {
     return new Promise((resolve, reject) => {
@@ -27,12 +51,15 @@ function httpsRequest(options, body) {
 
 // リフレッシュトークンから新しいアクセストークンを取得
 async function getAccessToken() {
-    if (!fs.existsSync(CRED_PATH) || !fs.existsSync(TOKEN_PATH)) {
+    const credPath = findLatest(CRED_CANDIDATES);
+    const tokenPath = findLatest(TOKEN_CANDIDATES);
+
+    if (!credPath || !tokenPath) {
         throw new Error('Google認証情報(credentials.json または token.json)が見つかりません。');
     }
 
-    const cred = JSON.parse(fs.readFileSync(CRED_PATH, 'utf8')).web;
-    const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+    const cred = JSON.parse(fs.readFileSync(credPath, 'utf8')).web;
+    const token = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
 
     const body = new URLSearchParams({
         client_id: cred.client_id,

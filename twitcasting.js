@@ -2,13 +2,31 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 
-const CONFIG_PATH = "C:\\scripts\\NeonTimerApp\\NeonTimer-win32-x64\\resources\\app\\twitcasting-config.json"; // 既存の設定ファイルを再利用
+const CANDIDATE_PATHS = [
+    path.join(__dirname, "..", "state", "services", "twitcasting-config.json"),
+    "C:\\scripts\\state\\services\\twitcasting-config.json",
+    "C:\\scripts\\NeonTimerApp\\NeonTimer-win32-x64\\resources\\app\\twitcasting-config.json",
+    "C:\\scripts\\NeonTimerApp\\twitcasting-config.json"
+];
 
 function getToken() {
     try {
-        if (fs.existsSync(CONFIG_PATH)) {
-            const data = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
-            return data.access_token;
+        // mtimeが最も新しいファイルを探索
+        let bestFile = null;
+        let bestMtime = -1;
+        for (const p of CANDIDATE_PATHS) {
+            if (fs.existsSync(p)) {
+                const stat = fs.statSync(p);
+                if (stat.mtimeMs > bestMtime) {
+                    bestMtime = stat.mtimeMs;
+                    bestFile = p;
+                }
+            }
+        }
+
+        if (bestFile) {
+            const data = JSON.parse(fs.readFileSync(bestFile, "utf8"));
+            return data.access_token || data.token;
         }
     } catch (e) {
         console.error("TwitCasting getToken error:", e.message);
