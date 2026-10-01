@@ -4,7 +4,7 @@ echo ============================================
 echo   MultiCommenter (Restream Shell) Build
 echo ============================================
 
-set PACKAGER=C:\scripts\NeonTimerApp\node_modules\.bin\electron-packager.cmd
+set PACKAGER=%~dp0..\NeonTimerApp\node_modules\.bin\electron-packager.cmd
 
 if not exist "%PACKAGER%" (
     echo [ERROR] electron-packager が見つかりません: %PACKAGER%
