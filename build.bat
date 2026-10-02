@@ -4,16 +4,24 @@ echo ============================================
 echo   MultiCommenter (Restream Shell) Build
 echo ============================================
 
-set PACKAGER=%~dp0..\NeonTimerApp\node_modules\.bin\electron-packager.cmd
+set LOCAL_PACKAGER=%~dp0..\NeonTimerApp\node_modules\.bin\electron-packager.cmd
 
-if not exist "%PACKAGER%" (
-    echo [ERROR] electron-packager が見つかりません: %PACKAGER%
-    pause
-    exit /b 1
+if exist "%LOCAL_PACKAGER%" (
+    set "PACKAGER_CMD=call "%LOCAL_PACKAGER%""
+    echo [INFO] NeonTimerApp 内の electron-packager を使用します。
+) else (
+    where electron-packager >nul 2>&1
+    if %ERRORLEVEL% equ 0 (
+        set "PACKAGER_CMD=electron-packager"
+        echo [INFO] グローバルにインストールされた electron-packager を使用します。
+    ) else (
+        set "PACKAGER_CMD=npx --yes electron-packager"
+        echo [INFO] npx 経由で electron-packager を実行します。
+    )
 )
 
 echo [1/2] スタンドアロン実行ファイル (.exe) をビルド中 (Electron v30.5.1 + オレンジ君アイコン)...
-call "%PACKAGER%" "%~dp0." MultiCommenter --platform=win32 --arch=x64 --overwrite --out="%~dp0dist" --electron-version=30.5.1 --icon="%~dp0icon.ico" --prune=true
+%PACKAGER_CMD% "%~dp0." MultiCommenter --platform=win32 --arch=x64 --overwrite --out="%~dp0dist" --electron-version=30.5.1 --icon="%~dp0icon.ico" --prune=true
 
 if %ERRORLEVEL% equ 0 (
     echo.

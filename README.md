@@ -38,9 +38,14 @@ npm start
 
 ### パッケージ化（.exe の生成）
 
+`build.bat` を実行するか、以下のコマンドを実行します：
+
 ```bash
-# build.bat を実行するか、以下のコマンドを実行
-npm run dist
+# build.bat は隣接する NeonTimerApp、グローバル、または npx 経由の electron-packager を自動検出して実行します
+build.bat
+
+# 手動で npx から実行する場合:
+npx electron-packager . MultiCommenter --platform=win32 --arch=x64 --overwrite --out=dist --electron-version=30.5.1 --icon=icon.ico --prune=true
 ```
 
 `dist/MultiCommenter-win32-x64/MultiCommenter.exe` が生成されます。
