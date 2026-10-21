@@ -2,16 +2,16 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
+const ROOT_DIR = path.resolve(__dirname, '..', '..');
+
 const CRED_CANDIDATES = [
-    path.join(__dirname, "..", "state", "tokens", "credentials.json"),
-    "C:\\scripts\\state\\tokens\\credentials.json",
-    "C:\\scripts\\NeonTimerApp\\credentials.json"
+    path.join(ROOT_DIR, 'state', 'tokens', 'credentials.json'),
+    path.join(__dirname, '..', 'NeonTimerApp', 'credentials.json')
 ];
 
 const TOKEN_CANDIDATES = [
-    path.join(__dirname, "..", "state", "tokens", "token.json"),
-    "C:\\scripts\\state\\tokens\\token.json",
-    "C:\\scripts\\NeonTimerApp\\NeonTimer-win32-x64\\resources\\app\\token.json"
+    path.join(ROOT_DIR, 'state', 'tokens', 'token.json'),
+    path.join(__dirname, '..', 'NeonTimerApp', 'NeonTimer-win32-x64', 'resources', 'app', 'token.json')
 ];
 
 function findLatest(candidates) {
@@ -58,8 +58,13 @@ async function getAccessToken() {
         throw new Error('Google認証情報(credentials.json または token.json)が見つかりません。');
     }
 
-    const cred = JSON.parse(fs.readFileSync(credPath, 'utf8')).web;
+    const rawCred = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+    const cred = rawCred.installed || rawCred.web || rawCred;
     const token = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+
+    if (!cred.client_id || !cred.client_secret || !token.refresh_token) {
+        throw new Error('Google認証情報に必要なキー(client_id, client_secret, refresh_token)が不足しています。');
+    }
 
     const body = new URLSearchParams({
         client_id: cred.client_id,
@@ -79,6 +84,15 @@ async function getAccessToken() {
     }, body);
 
     if (res.status === 200 && res.data.access_token) {
+        try {
+            token.access_token = res.data.access_token;
+            if (res.data.expires_in) {
+                token.expiry_date = Date.now() + res.data.expires_in * 1000;
+            }
+            fs.writeFileSync(tokenPath, JSON.stringify(token, null, 2), 'utf8');
+        } catch (_) {
+            // 書戻し失敗は無視してメモリのトークンで継続
+        }
         return res.data.access_token;
     }
 
@@ -107,6 +121,26 @@ async function getLiveChatId(accessToken) {
             }
         }
     }
+
+    // active / upcoming で見つからない場合、mine=true を探索
+    const mineRes = await httpsRequest({
+        hostname: 'www.googleapis.com',
+        path: '/youtube/v3/liveBroadcasts?part=snippet&mine=true&maxResults=5',
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json'
+        }
+    });
+    if (mineRes.status === 200 && mineRes.data.items && mineRes.data.items.length > 0) {
+        for (const item of mineRes.data.items) {
+            if (item.snippet && item.snippet.liveChatId) {
+                console.log(`[YouTube] 配信枠検出(mine): "${item.snippet.title}" (chatId: ${item.snippet.liveChatId})`);
+                return item.snippet.liveChatId;
+            }
+        }
+    }
+
     return null;
 }
 
