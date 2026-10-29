@@ -391,6 +391,7 @@
         <div class="window-controls" id="window-controls">
             <button class="control-btn active" id="pin-btn" title="最前面固定の切替 (Ctrl+Shift+T)">📌</button>
             <button class="control-btn" id="ghost-btn" title="クリック透過の切替 (Ctrl+Shift+Space)">👻</button>
+            <button class="control-btn" id="repair-btn" title="認証の自動修復">🔧</button>
             <button class="control-btn" id="min-btn" title="最小化">_</button>
             <button class="control-btn close" id="close-btn" title="閉じる">✕</button>
         </div>
@@ -479,8 +480,24 @@
     const ghostBtn = document.getElementById('ghost-btn');
     const minBtn = document.getElementById('min-btn');
     const closeBtn = document.getElementById('close-btn');
+    const repairBtn = document.getElementById('repair-btn');
     const titlebar = document.getElementById('titlebar');
     let isGhostActive = false;
+
+    function addSystemMessage(text) {
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble';
+        bubble.style.borderLeftColor = '#555';
+        bubble.innerHTML = `
+            <div class="bubble-header">
+                <span class="bubble-author">System</span>
+                <span>Repair</span>
+            </div>
+            <div class="bubble-text" style="color: var(--text-sub); font-size: 12px;"></div>`;
+        bubble.querySelector('.bubble-text').textContent = text;
+        chatStream.appendChild(bubble);
+        chatStream.scrollTop = chatStream.scrollHeight;
+    }
 
     if (api) {
         pinBtn.addEventListener('click', (e) => {
@@ -498,6 +515,26 @@
         closeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             api.close();
+        });
+        repairBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            repairBtn.disabled = true;
+            repairBtn.textContent = '⏳';
+            try {
+                const res = await fetch('/api/repair', { method: 'POST' });
+                const data = await res.json();
+                const twitch = data && data.services && data.services.twitch;
+                const label = twitch && twitch.status === 'refreshed' ? 'Twitchを修復しました'
+                    : twitch && twitch.status === 'valid' ? '修復不要（Twitchは有効）'
+                    : twitch && twitch.status === 'reauth-required' ? 'Twitchは再認証が必要です'
+                    : '修復対象の設定がありません';
+                addSystemMessage(label);
+            } catch (_) {
+                addSystemMessage('修復処理に失敗しました');
+            } finally {
+                repairBtn.disabled = false;
+                repairBtn.textContent = '🔧';
+            }
         });
 
         api.onPinStatusChanged((isPinned) => {

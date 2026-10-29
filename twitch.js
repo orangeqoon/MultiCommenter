@@ -1,12 +1,26 @@
 const https = require('https');
 const fs = require('fs');
 
-const CONFIG_PATH = "C:\\scripts\\NeonTimerApp\\twitch-config.json";
+const path = require('path');
+const { stateServiceFile, neonFile } = require('./paths');
+
+function getConfigPath() {
+    const candidates = [
+        stateServiceFile('twitch-config.json'),
+        neonFile('twitch-config.json'),
+        path.join(__dirname, 'twitch-config.json')
+    ];
+    for (const c of candidates) {
+        if (fs.existsSync(c)) return c;
+    }
+    return candidates[0];
+}
 
 function loadConfig() {
     try {
-        if (fs.existsSync(CONFIG_PATH)) {
-            return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+        const p = getConfigPath();
+        if (fs.existsSync(p)) {
+            return JSON.parse(fs.readFileSync(p, 'utf8'));
         }
     } catch (e) {}
     return null;
@@ -54,7 +68,7 @@ async function refreshAccessToken(config) {
         config.access_token = res.body.access_token;
         if (res.body.refresh_token) config.refresh_token = res.body.refresh_token;
         try {
-            fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+            fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
             console.log('[Twitch] トークンのリフレッシュと保存に成功しました。');
         } catch (err) {
             console.error('[Twitch] トークン保存失敗:', err.message);
@@ -146,5 +160,7 @@ async function postComment(text) {
 
 module.exports = {
     postComment,
-    refreshAccessToken
+    refreshAccessToken,
+    getConfigPath,
+    loadConfig
 };

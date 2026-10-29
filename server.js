@@ -10,6 +10,7 @@ const youtubeApi = require('./youtube');
 const kickApi = require('./kick');
 const fc2Api = require('./fc2');
 const picartoApi = require('./picarto');
+const { neonFile } = require('./paths');
 
 const PORT = 18767;
 const pendingFc2Comments = [];
@@ -56,6 +57,19 @@ const server = http.createServer(async (req, res) => {
         pendingFc2Comments.length = 0; // キューをクリア
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ comments }));
+        return;
+    }
+
+    // 認証の自動修復（現在はリフレッシュトークンを持つTwitchを対象）
+    if (req.method === 'POST' && req.url === '/api/repair') {
+        try {
+            const result = await repairServices();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, services: result }));
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'repair-failed' }));
+        }
         return;
     }
 
@@ -269,21 +283,25 @@ async function preflightTokenCheck() {
     await checkTwitchToken();
 }
 
-async function checkTwitchToken() {
+async function repairServices() {
+    return { twitch: await checkTwitchToken(false) };
+}
+
+async function checkTwitchToken(openAuthOnFailure = true) {
     const https = require('https');
     const fs = require('fs');
-    const CONFIG_PATH = 'C:\\scripts\\NeonTimerApp\\twitch-config.json';
+    const CONFIG_PATH = twitchApi.getConfigPath();
 
     let config;
     try {
         config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     } catch (e) {
-        console.log('[Preflight][Twitch] 設定ファイルなし。スキップ。');
-        return;
+        console.log('[Preflight][Twitch] 設定ファイルなし。');
+        return { status: 'missing-config' };
     }
     if (!config.access_token) {
-        console.log('[Preflight][Twitch] トークンなし。スキップ。');
-        return;
+        console.log('[Preflight][Twitch] トークンなし。');
+        return { status: 'missing-token' };
     }
 
     // アクセストークンの有効性確認
@@ -306,7 +324,7 @@ async function checkTwitchToken() {
 
     if (isValid) {
         console.log('[Preflight][Twitch] ✅ トークン有効。');
-        return;
+        return { status: 'valid' };
     }
 
     // 期限切れ → リフレッシュ自動実行
@@ -316,15 +334,17 @@ async function checkTwitchToken() {
 
     if (newToken) {
         console.log('[Preflight][Twitch] ✅ 自動リフレッシュ成功！次回コメントからそのまま使えます。');
+        return { status: 'refreshed' };
     } else {
         console.log('[Preflight][Twitch] ❌ リフレッシュ失敗。NeonTimerApp\\auth_twitch.bat を実行して再認証してください。');
         // ユーザーに気づかせるため、自動でブラウザ起動
         const { exec } = require('child_process');
-        const batPath = 'C:\\scripts\\NeonTimerApp\\auth_twitch.bat';
-        if (fs.existsSync(batPath)) {
+        const batPath = neonFile('auth_twitch.bat');
+        if (openAuthOnFailure && fs.existsSync(batPath)) {
             console.log('[Preflight][Twitch] ブラウザで認証ページを自動で開きます...');
             exec(`start "" "${batPath}"`);
         }
+        return { status: 'reauth-required' };
     }
 }
 
